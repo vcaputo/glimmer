@@ -131,7 +131,6 @@ static void gtk_fb_release(fb_t *fb, void *context)
 
 	gtk_widget_remove_tick_callback(c->image, c->tick_callback);
 	gtk_widget_destroy(c->window);
-	gtk_widget_destroy(c->image);
 }
 
 
