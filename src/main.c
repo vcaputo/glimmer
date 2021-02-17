@@ -117,8 +117,6 @@ static void glimmer_go(GtkButton *button, gpointer user_data)
 		return;
 	}
 
-	pthread_t		thread;
-
 	pthread_create(&glimmer.thread, NULL, glimmer_thread, NULL);
 }
 
