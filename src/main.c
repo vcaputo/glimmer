@@ -77,13 +77,9 @@ static void glimmer_go(GtkButton *button, gpointer user_data)
 		pthread_cancel(glimmer.thread);
 		pthread_join(glimmer.thread, NULL);
 
-		/* FIXME: all these _free() functions in librototiller should return NULL */
-		fb_free(glimmer.fb);
-		glimmer.fb = NULL;
-		settings_free(glimmer.fb_settings);
-		glimmer.fb_settings = NULL;
-		settings_free(glimmer.module_settings);
-		glimmer.module_settings = NULL;
+		glimmer.fb = fb_free(glimmer.fb);
+		glimmer.fb_settings = settings_free(glimmer.fb_settings);
+		glimmer.module_settings = settings_free(glimmer.module_settings);
 	}
 
 	/* TODO: translate the GTK+ settings panel values into
