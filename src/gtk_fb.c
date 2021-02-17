@@ -141,6 +141,14 @@ static void * gtk_fb_page_alloc(fb_t *fb, void *context, fb_page_t *res_page)
 	if (!p)
 		return NULL;
 
+	/* XXX: note this is a plain in-memory surface that will always work everywhere,
+	 * but that generality prevents potential optimizations.
+	 * With some extra effort, on backends like X, an xshm surface could be
+	 * created instead, for a potential performance boost by having the
+	 * surface contents accessible server-side where accelerated copies may
+	 * be used, while also accessible client-side where rototiller draws into.
+	 * TODO if better X performance is desired.
+	 */
 	p->surface = cairo_image_surface_create(CAIRO_FORMAT_RGB24, c->width, c->height);
 
 	res_page->fragment.buf = (uint32_t *)cairo_image_surface_get_data(p->surface);
