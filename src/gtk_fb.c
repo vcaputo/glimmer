@@ -27,7 +27,6 @@
 typedef struct gtk_fb_t {
 	GtkWidget	*window;
 	GtkWidget	*image;
-	guint		tick_callback;
 	unsigned	width, height;
 	unsigned	fullscreen:1;
 } gtk_fb_t;
@@ -117,7 +116,7 @@ static int gtk_fb_acquire(fb_t *fb, void *context, void *page)
 	c->window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 	c->image = gtk_image_new_from_surface(p->surface);
 	g_signal_connect(c->image, "draw", G_CALLBACK(draw_cb), fb);
-	c->tick_callback = gtk_widget_add_tick_callback(c->image, queue_draw_cb, c, NULL);
+	gtk_widget_add_tick_callback(c->image, queue_draw_cb, c, NULL);
 	gtk_container_add(GTK_CONTAINER(c->window), c->image);
 	gtk_widget_show_all(c->window);
 
@@ -129,7 +128,6 @@ static void gtk_fb_release(fb_t *fb, void *context)
 {
 	gtk_fb_t	*c = context;
 
-	gtk_widget_remove_tick_callback(c->image, c->tick_callback);
 	gtk_widget_destroy(c->window);
 }
 
