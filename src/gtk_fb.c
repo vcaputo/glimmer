@@ -38,7 +38,9 @@ struct gtk_fb_page_t {
 };
 
 
-/* this doesn't really do anything significant on gtk */
+/* parse settings and get the output window realized before
+ * attempting to create any pages "similar" to it.
+ */
 static int gtk_fb_init(const settings_t *settings, void **res_context)
 {
 	const char	*fullscreen;
@@ -67,6 +69,9 @@ static int gtk_fb_init(const settings_t *settings, void **res_context)
 	if (size) /* TODO: errors */
 		sscanf(size, "%u%*[xX]%u", &c->width, &c->height);
 
+	c->window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+	gtk_widget_realize(c->window);
+
 	*res_context = c;
 
 	return 0;
@@ -77,6 +82,7 @@ static void gtk_fb_shutdown(fb_t *fb, void *context)
 {
 	gtk_fb_t	*c = context;
 
+	gtk_widget_destroy(c->window);
 	free(c);
 }
 
@@ -113,7 +119,6 @@ static int gtk_fb_acquire(fb_t *fb, void *context, void *page)
 	gtk_fb_t	*c = context;
 	gtk_fb_page_t	*p = page;
 
-	c->window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 	c->image = gtk_image_new_from_surface(p->surface);
 	g_signal_connect(c->image, "draw", G_CALLBACK(draw_cb), fb);
 	gtk_widget_add_tick_callback(c->image, queue_draw_cb, c, NULL);
@@ -128,7 +133,7 @@ static void gtk_fb_release(fb_t *fb, void *context)
 {
 	gtk_fb_t	*c = context;
 
-	gtk_widget_destroy(c->window);
+	gtk_widget_destroy(c->image);
 }
 
 
@@ -136,20 +141,17 @@ static void * gtk_fb_page_alloc(fb_t *fb, void *context, fb_page_t *res_page)
 {
 	gtk_fb_t	*c = context;
 	gtk_fb_page_t	*p;
+	GdkWindow	*gdk_window;
 
 	p = calloc(1, sizeof(gtk_fb_page_t));
 	if (!p)
 		return NULL;
 
-	/* XXX: note this is a plain in-memory surface that will always work everywhere,
-	 * but that generality prevents potential optimizations.
-	 * With some extra effort, on backends like X, an xshm surface could be
-	 * created instead, for a potential performance boost by having the
-	 * surface contents accessible server-side where accelerated copies may
-	 * be used, while also accessible client-side where rototiller draws into.
-	 * TODO if better X performance is desired.
+	/* by using gdk_window_create_similar_image_surface(), we enable
+	 * potential optimizations like XSHM use on the xlib cairo backend.
 	 */
-	p->surface = cairo_image_surface_create(CAIRO_FORMAT_RGB24, c->width, c->height);
+	gdk_window = gtk_widget_get_window(c->window);
+	p->surface = gdk_window_create_similar_image_surface(gdk_window, CAIRO_FORMAT_RGB24, c->width, c->height, 0);
 
 	res_page->fragment.buf = (uint32_t *)cairo_image_surface_get_data(p->surface);
 	res_page->fragment.width = c->width;
