@@ -76,6 +76,7 @@ static void glimmer_go(GtkButton *button, gpointer user_data)
 	if (glimmer.fb) {
 		pthread_cancel(glimmer.thread);
 		pthread_join(glimmer.thread, NULL);
+		rototiller_quiesce();
 
 		glimmer.fb = fb_free(glimmer.fb);
 		glimmer.fb_settings = settings_free(glimmer.fb_settings);
