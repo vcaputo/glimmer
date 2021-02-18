@@ -29,6 +29,7 @@ typedef struct gtk_fb_t {
 	GtkWidget	*image;
 	unsigned	width, height;
 	unsigned	fullscreen:1;
+	unsigned	resized:1;
 } gtk_fb_t;
 
 typedef struct gtk_fb_page_t gtk_fb_page_t;
@@ -36,6 +37,28 @@ typedef struct gtk_fb_page_t gtk_fb_page_t;
 struct gtk_fb_page_t {
 	cairo_surface_t	*surface;
 };
+
+
+/* called on "configure-event" for the fb's gtk window */
+static gboolean resized(GtkWidget *widget, GdkEvent *event, gpointer user_data)
+{
+	gtk_fb_t	*c = user_data;
+
+	if (c->width != event->configure.width ||
+	    c->height != event->configure.height) {
+
+		/* just cache the new dimensions and set a resized flag, these will
+		 * become realized @ flip time where the fb is available by telling
+		 * the fb to rebuild via fb_rebuild() and clearing the resized flag.
+		 */
+
+		c->width = event->configure.width;
+		c->height = event->configure.height;
+		c->resized = 1;
+	}
+
+	return FALSE;
+}
 
 
 /* parse settings and get the output window realized before
@@ -71,6 +94,7 @@ static int gtk_fb_init(const settings_t *settings, void **res_context)
 
 	c->window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 	gtk_widget_realize(c->window);
+	g_signal_connect(c->window, "configure-event", G_CALLBACK(resized), c);
 
 	*res_context = c;
 
@@ -181,7 +205,7 @@ static int gtk_fb_page_free(fb_t *fb, void *context, void *page)
 
 
 /* XXX: due to gtk's event-driven nature, this isn't a vsync-synchronous page flip,
- * so and fb_flip() must be scheduled independently to not just spin.
+ * so fb_flip() must be scheduled independently to not just spin.
  * The "draw" signal on the image is used to drive fb_flip() on frameclock "ticks",
  * a method suggested by Christian Hergert, thanks!
  */
@@ -192,6 +216,11 @@ static int gtk_fb_page_flip(fb_t *fb, void *context, void *page)
 
 	cairo_surface_mark_dirty(p->surface);
 	gtk_image_set_from_surface(GTK_IMAGE(c->image), p->surface);
+
+	if (c->resized) {
+		c->resized = 0;
+		fb_rebuild(fb);
+	}
 
 	return 0;
 }
