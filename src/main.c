@@ -18,11 +18,11 @@
 #include <pthread.h>
 #include <sys/time.h>
 
-#include "rototiller.h"
+#include <til.h>
 
 /* glimmer is a GTK+-3.0 frontend for rototiller */
 
-extern fb_ops_t gtk_fb_ops;
+extern til_fb_ops_t gtk_fb_ops;
 
 #define DEFAULT_WIDTH	320
 #define DEFAULT_HEIGHT	480
@@ -31,17 +31,17 @@ extern fb_ops_t gtk_fb_ops;
 #define NUM_FB_PAGES	3
 
 static struct glimmer_t {
-	GtkWidget			*modules_list;
+	GtkWidget		*modules_list;
 
-	fb_t				*fb;
-	settings_t			*fb_settings;
+	til_fb_t		*fb;
+	til_settings_t		*fb_settings;
 
-	settings_t			*module_settings;
-	const rototiller_module_t	*module;
-	void				*module_context;
-	pthread_t			thread;
-	struct timeval			start_tv;
-	unsigned			ticks_offset;	/* XXX: this isn't leveraged currently */
+	til_settings_t		*module_settings;
+	const til_module_t	*module;
+	void			*module_context;
+	pthread_t		thread;
+	struct timeval		start_tv;
+	unsigned		ticks_offset;	/* XXX: this isn't leveraged currently */
 } glimmer;
 
 
@@ -51,20 +51,20 @@ static unsigned get_ticks(const struct timeval *start, const struct timeval *now
 }
 
 
-/* TODO: this should probably move into librototiller */
+/* TODO: this should probably move into libtil */
 static void * glimmer_thread(void *foo)
 {
 	struct timeval	now;
 
 	for (;;) {
-		fb_page_t	*page;
+		til_fb_page_t	*page;
 		unsigned	ticks;
 
-		page = fb_page_get(glimmer.fb);
+		page = til_fb_page_get(glimmer.fb);
 		gettimeofday(&now, NULL);
 		ticks = get_ticks(&glimmer.start_tv, &now, glimmer.ticks_offset);
-		rototiller_module_render(glimmer.module, glimmer.module_context, ticks, &page->fragment);
-		fb_page_put(glimmer.fb, page);
+		til_module_render(glimmer.module, glimmer.module_context, ticks, &page->fragment);
+		til_fb_page_put(glimmer.fb, page);
 	}
 }
 
@@ -76,11 +76,11 @@ static void glimmer_go(GtkButton *button, gpointer user_data)
 	if (glimmer.fb) {
 		pthread_cancel(glimmer.thread);
 		pthread_join(glimmer.thread, NULL);
-		rototiller_quiesce();
+		til_quiesce();
 
-		glimmer.fb = fb_free(glimmer.fb);
-		glimmer.fb_settings = settings_free(glimmer.fb_settings);
-		glimmer.module_settings = settings_free(glimmer.module_settings);
+		glimmer.fb = til_fb_free(glimmer.fb);
+		glimmer.fb_settings = til_settings_free(glimmer.fb_settings);
+		glimmer.module_settings = til_settings_free(glimmer.module_settings);
 	}
 
 	/* TODO: translate the GTK+ settings panel values into
@@ -91,18 +91,18 @@ static void glimmer_go(GtkButton *button, gpointer user_data)
 	 * simply don't do any module setup (those *should* have static builtin
 	 * defaults that at least work on some level.
 	 */
-	glimmer.fb_settings = settings_new("fullscreen=off,size=640x480");
-	glimmer.module_settings = settings_new("TODO");
+	glimmer.fb_settings = til_settings_new("fullscreen=off,size=640x480");
+	glimmer.module_settings = til_settings_new("TODO");
 
-	r = fb_new(&gtk_fb_ops, glimmer.fb_settings, NUM_FB_PAGES, &glimmer.fb);
+	r = til_fb_new(&gtk_fb_ops, glimmer.fb_settings, NUM_FB_PAGES, &glimmer.fb);
 	if (r < 0) {
 		puts("fb no go!");
 		return;
 	}
 
 	gettimeofday(&glimmer.start_tv, NULL);
-	glimmer.module = rototiller_lookup_module(gtk_combo_box_text_get_active_text(GTK_COMBO_BOX_TEXT(glimmer.modules_list)));
-	r = rototiller_module_create_context(
+	glimmer.module = til_lookup_module(gtk_combo_box_text_get_active_text(GTK_COMBO_BOX_TEXT(glimmer.modules_list)));
+	r = til_module_create_context(
 					glimmer.module,
 					get_ticks(
 						&glimmer.start_tv,
@@ -120,11 +120,11 @@ static void glimmer_go(GtkButton *button, gpointer user_data)
 
 static void activate(GtkApplication *app, gpointer user_data)
 {
-	GtkWidget			*window, *vbox, *settings, *button;
-	const rototiller_module_t	**modules;
-	size_t				n_modules;
+	GtkWidget		*window, *vbox, *settings, *button;
+	const til_module_t	**modules;
+	size_t			n_modules;
 
-	rototiller_get_modules(&modules, &n_modules);
+	til_get_modules(&modules, &n_modules);
 
 	window = gtk_application_window_new(app);
 	gtk_window_set_title(GTK_WINDOW(window), "glimmer");
@@ -176,12 +176,12 @@ int main(int argc, char **argv)
 	GtkApplication	*app;
 	int		status;
 
-	rototiller_init();
+	til_init();
 	app = gtk_application_new("com.pengaru.glimmer", G_APPLICATION_FLAGS_NONE);
 	g_signal_connect(app, "activate", G_CALLBACK(activate), NULL);
 	status = g_application_run(G_APPLICATION(app), argc, argv);
 	g_object_unref(app);
-	rototiller_shutdown();
+	til_shutdown();
 
 	return status;
 }

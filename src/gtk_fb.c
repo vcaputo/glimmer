@@ -19,8 +19,8 @@
 #include <inttypes.h>
 #include <stdlib.h>
 
-#include "fb.h"
-#include "settings.h"
+#include <til_fb.h>
+#include <til_settings.h>
 
 /* glimmer's GTK+-3.0 backend fb for rototiller */
 
@@ -64,7 +64,7 @@ static gboolean resized(GtkWidget *widget, GdkEvent *event, gpointer user_data)
 /* parse settings and get the output window realized before
  * attempting to create any pages "similar" to it.
  */
-static int gtk_fb_init(const settings_t *settings, void **res_context)
+static int gtk_fb_init(const til_settings_t *settings, void **res_context)
 {
 	const char	*fullscreen;
 	const char	*size;
@@ -74,11 +74,11 @@ static int gtk_fb_init(const settings_t *settings, void **res_context)
 	assert(settings);
 	assert(res_context);
 
-	fullscreen = settings_get_value(settings, "fullscreen");
+	fullscreen = til_settings_get_value(settings, "fullscreen");
 	if (!fullscreen)
 		return -EINVAL;
 
-	size = settings_get_value(settings, "size");
+	size = til_settings_get_value(settings, "size");
 	if (!size && !strcasecmp(fullscreen, "off"))
 		return -EINVAL;
 
@@ -102,7 +102,7 @@ static int gtk_fb_init(const settings_t *settings, void **res_context)
 }
 
 
-static void gtk_fb_shutdown(fb_t *fb, void *context)
+static void gtk_fb_shutdown(til_fb_t *fb, void *context)
 {
 	gtk_fb_t	*c = context;
 
@@ -120,9 +120,9 @@ static void gtk_fb_shutdown(fb_t *fb, void *context)
  */
 static gboolean draw_cb(GtkWidget *widget, cairo_t *cr, gpointer user_data)
 {
-	fb_t	*fb = user_data;
+	til_fb_t	*fb = user_data;
 
-	fb_flip(fb);
+	til_fb_flip(fb);
 
 	return FALSE;
 }
@@ -138,7 +138,7 @@ static gboolean queue_draw_cb(GtkWidget *widget, GdkFrameClock *frame_clock, gpo
 }
 
 
-static int gtk_fb_acquire(fb_t *fb, void *context, void *page)
+static int gtk_fb_acquire(til_fb_t *fb, void *context, void *page)
 {
 	gtk_fb_t	*c = context;
 	gtk_fb_page_t	*p = page;
@@ -153,7 +153,7 @@ static int gtk_fb_acquire(fb_t *fb, void *context, void *page)
 }
 
 
-static void gtk_fb_release(fb_t *fb, void *context)
+static void gtk_fb_release(til_fb_t *fb, void *context)
 {
 	gtk_fb_t	*c = context;
 
@@ -161,7 +161,7 @@ static void gtk_fb_release(fb_t *fb, void *context)
 }
 
 
-static void * gtk_fb_page_alloc(fb_t *fb, void *context, fb_page_t *res_page)
+static void * gtk_fb_page_alloc(til_fb_t *fb, void *context, til_fb_page_t *res_page)
 {
 	gtk_fb_t	*c = context;
 	gtk_fb_page_t	*p;
@@ -192,7 +192,7 @@ static void * gtk_fb_page_alloc(fb_t *fb, void *context, fb_page_t *res_page)
 }
 
 
-static int gtk_fb_page_free(fb_t *fb, void *context, void *page)
+static int gtk_fb_page_free(til_fb_t *fb, void *context, void *page)
 {
 	gtk_fb_t	*c = context;
 	gtk_fb_page_t	*p = page;
@@ -205,11 +205,11 @@ static int gtk_fb_page_free(fb_t *fb, void *context, void *page)
 
 
 /* XXX: due to gtk's event-driven nature, this isn't a vsync-synchronous page flip,
- * so fb_flip() must be scheduled independently to not just spin.
- * The "draw" signal on the image is used to drive fb_flip() on frameclock "ticks",
+ * so til_fb_flip() must be scheduled independently to not just spin.
+ * The "draw" signal on the image is used to drive til_fb_flip() on frameclock "ticks",
  * a method suggested by Christian Hergert, thanks!
  */
-static int gtk_fb_page_flip(fb_t *fb, void *context, void *page)
+static int gtk_fb_page_flip(til_fb_t *fb, void *context, void *page)
 {
 	gtk_fb_t	*c = context;
 	gtk_fb_page_t	*p = page;
@@ -219,14 +219,14 @@ static int gtk_fb_page_flip(fb_t *fb, void *context, void *page)
 
 	if (c->resized) {
 		c->resized = 0;
-		fb_rebuild(fb);
+		til_fb_rebuild(fb);
 	}
 
 	return 0;
 }
 
 
-fb_ops_t gtk_fb_ops = {
+til_fb_ops_t gtk_fb_ops = {
 	/* TODO: .setup may not be necessary in the gtk frontend, unless maybe
 	 * it learns to use multiple fb backends, and would like to do the whole dynamic
 	 * settings iterative dance established by rototiller.
@@ -234,7 +234,7 @@ fb_ops_t gtk_fb_ops = {
 	 */
 
 	/* everything else seems to not be too far out of wack for the new frontend as-is,
-	 * I only had to plumb down the fb_t *fb, which classic rototiller didn't need to do.
+	 * I only had to plumb down the til_fb_t *fb, which classic rototiller didn't need to do.
 	 */
 	.init = gtk_fb_init,
 	.shutdown = gtk_fb_shutdown,
