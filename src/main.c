@@ -34,7 +34,7 @@ static struct glimmer_t {
 	GtkWidget		*modules_list;
 
 	til_fb_t		*fb;
-	til_settings_t		*fb_settings;
+	til_settings_t		*video_settings;
 
 	til_settings_t		*module_settings;
 	const til_module_t	*module;
@@ -79,7 +79,7 @@ static void glimmer_go(GtkButton *button, gpointer user_data)
 		til_quiesce();
 
 		glimmer.fb = til_fb_free(glimmer.fb);
-		glimmer.fb_settings = til_settings_free(glimmer.fb_settings);
+		glimmer.video_settings = til_settings_free(glimmer.video_settings);
 		glimmer.module_settings = til_settings_free(glimmer.module_settings);
 	}
 
@@ -91,10 +91,10 @@ static void glimmer_go(GtkButton *button, gpointer user_data)
 	 * simply don't do any module setup (those *should* have static builtin
 	 * defaults that at least work on some level.
 	 */
-	glimmer.fb_settings = til_settings_new("fullscreen=off,size=640x480");
+	glimmer.video_settings = til_settings_new("fullscreen=off,size=640x480");
 	glimmer.module_settings = til_settings_new("TODO");
 
-	r = til_fb_new(&gtk_fb_ops, glimmer.fb_settings, NUM_FB_PAGES, &glimmer.fb);
+	r = til_fb_new(&gtk_fb_ops, glimmer.video_settings, NUM_FB_PAGES, &glimmer.fb);
 	if (r < 0) {
 		puts("fb no go!");
 		return;
