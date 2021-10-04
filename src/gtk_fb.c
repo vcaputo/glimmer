@@ -74,11 +74,11 @@ static int gtk_fb_init(const til_settings_t *settings, void **res_context)
 	assert(settings);
 	assert(res_context);
 
-	fullscreen = til_settings_get_value(settings, "fullscreen");
+	fullscreen = til_settings_get_value(settings, "fullscreen", NULL);
 	if (!fullscreen)
 		return -EINVAL;
 
-	size = til_settings_get_value(settings, "size");
+	size = til_settings_get_value(settings, "size", NULL);
 	if (!size && !strcasecmp(fullscreen, "off"))
 		return -EINVAL;
 
