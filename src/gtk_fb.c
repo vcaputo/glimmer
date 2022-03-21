@@ -39,21 +39,23 @@ struct gtk_fb_page_t {
 };
 
 
-/* called on "configure-event" for the fb's gtk window */
+/* called on "size-allocate" for the fb's gtk window */
 static gboolean resized(GtkWidget *widget, GdkEvent *event, gpointer user_data)
 {
 	gtk_fb_t	*c = user_data;
+	GtkAllocation	alloc;
 
-	if (c->width != event->configure.width ||
-	    c->height != event->configure.height) {
+	gtk_widget_get_allocation(c->image, &alloc);
+	if (c->width != alloc.width ||
+	    c->height != alloc.height) {
 
 		/* just cache the new dimensions and set a resized flag, these will
 		 * become realized @ flip time where the fb is available by telling
 		 * the fb to rebuild via fb_rebuild() and clearing the resized flag.
 		 */
 
-		c->width = event->configure.width;
-		c->height = event->configure.height;
+		c->width = alloc.width;
+		c->height = alloc.height;
 		c->resized = 1;
 	}
 
@@ -94,7 +96,7 @@ static int gtk_fb_init(const til_settings_t *settings, void **res_context)
 
 	c->window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 	gtk_widget_realize(c->window);
-	g_signal_connect(c->window, "configure-event", G_CALLBACK(resized), c);
+	g_signal_connect_after(c->window, "size-allocate", G_CALLBACK(resized), c);
 
 	*res_context = c;
 
