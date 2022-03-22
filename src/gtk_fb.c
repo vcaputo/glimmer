@@ -39,8 +39,8 @@ struct gtk_fb_page_t {
 };
 
 
-/* called on "size-allocate" for the fb's gtk window */
-static gboolean resized(GtkWidget *widget, GdkEvent *event, gpointer user_data)
+/* called on "size-allocate" for the fb's gtk image */
+static void resized(GtkWidget *widget, GtkAllocation *allocation, gpointer user_data)
 {
 	gtk_fb_t	*c = user_data;
 	GtkAllocation	alloc;
@@ -58,8 +58,6 @@ static gboolean resized(GtkWidget *widget, GdkEvent *event, gpointer user_data)
 		c->height = alloc.height;
 		c->resized = 1;
 	}
-
-	return FALSE;
 }
 
 
@@ -96,7 +94,6 @@ static int gtk_fb_init(const til_settings_t *settings, void **res_context)
 
 	c->window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 	gtk_widget_realize(c->window);
-	g_signal_connect_after(c->window, "size-allocate", G_CALLBACK(resized), c);
 
 	*res_context = c;
 
@@ -146,7 +143,9 @@ static int gtk_fb_acquire(til_fb_t *fb, void *context, void *page)
 	gtk_fb_page_t	*p = page;
 
 	c->image = gtk_image_new_from_surface(p->surface);
+	g_signal_connect_after(c->image, "size-allocate", G_CALLBACK(resized), c);
 	g_signal_connect(c->image, "draw", G_CALLBACK(draw_cb), fb);
+	gtk_widget_set_size_request(c->image, c->width, c->height);
 	gtk_widget_add_tick_callback(c->image, queue_draw_cb, c, NULL);
 	gtk_container_add(GTK_CONTAINER(c->window), c->image);
 	gtk_widget_show_all(c->window);
