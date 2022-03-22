@@ -176,7 +176,7 @@ static void * gtk_fb_page_alloc(til_fb_t *fb, void *context, til_fb_page_t *res_
 	 * potential optimizations like XSHM use on the xlib cairo backend.
 	 */
 	gdk_window = gtk_widget_get_window(c->window);
-	p->surface = gdk_window_create_similar_image_surface(gdk_window, CAIRO_FORMAT_RGB24, c->width, c->height, 0);
+	p->surface = gdk_window_create_similar_image_surface(gdk_window, CAIRO_FORMAT_RGB24, c->width, c->height, 1);
 
 	res_page->fragment.buf = (uint32_t *)cairo_image_surface_get_data(p->surface);
 	res_page->fragment.width = c->width;
