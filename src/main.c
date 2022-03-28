@@ -32,11 +32,12 @@ extern til_fb_ops_t gtk_fb_ops;
 #define BOX_SPACING	1
 #define FRAME_MARGIN	8
 #define LABEL_MARGIN	4
+#define CONTROL_MARGIN	LABEL_MARGIN
 #define NUM_FB_PAGES	3
 
 static struct glimmer_t {
 	GtkComboBox		*modules_combobox;
-	GtkWidget		*module_box, *module_frame;
+	GtkWidget		*window, *module_box, *module_frame, *settings_box, *settings_frame;
 
 	til_args_t		args;
 	til_settings_t		*video_settings;
@@ -52,6 +53,8 @@ static struct glimmer_t {
 
 
 static void glimmer_module_setup(const til_module_t *module, til_settings_t *settings);
+static void glimmer_settings_rebuild(const til_module_t *module, til_settings_t *settings);
+static void glimmer_active_settings_rebuild(void);
 
 
 static unsigned glimmer_get_ticks(const struct timeval *start, const struct timeval *now, unsigned offset)
@@ -82,10 +85,20 @@ static void glimmer_active_module(const til_module_t **res_module, til_settings_
 static void glimmer_active_module_setup(void)
 {
 	const til_module_t	*module;
-	til_settings_t	*settings;
+	til_settings_t		*settings;
 
 	glimmer_active_module(&module, &settings);
 	glimmer_module_setup(module, settings);
+}
+
+
+static void glimmer_active_settings_rebuild(void)
+{
+	const til_module_t	*module;
+	til_settings_t		*settings;
+
+	glimmer_active_module(&module, &settings);
+	glimmer_settings_rebuild(module, settings);
 }
 
 
@@ -146,54 +159,158 @@ static void glimmer_go(GtkButton *button, gpointer user_data)
 }
 
 
+static gboolean glimmer_active_settings_rebuild_cb(gpointer unused)
+{
+	glimmer_active_settings_rebuild();
+
+	return FALSE;
+}
+
+
 static void glimmer_combobox_setting_changed_cb(GtkComboBoxText *combobox, gpointer user_data)
 {
 	til_setting_t	*setting = user_data;
 
-	/* XXX FIXME FIXME XXX */
-	/* XXX FIXME FIXME XXX */
-	/* I don't know gtk+ well enough to know what's the non-leaky way to do this:
-	 * glimmer_active_module_setup() will destroy the module frame which encompasses the
-	 * widget this signal emitted from.  It appears that there isn't a reference held across
-	 * the signal callbacks so they can safely perform a queued destroy of the originating widget
-	 * within the callback to then become realized at the end of all the signal deliveries and
-	 * callback processing when the final reference gets removed.
-	 *
-	 * for now I'm working around this by simply adding a ref, leaking the memory, until I find
-	 * the Right Way.
-	 */
-	g_object_ref(combobox);
-	/* XXX FIXME FIXME XXX */
-	/* XXX FIXME FIXME XXX */
-
 	setting->value = gtk_combo_box_text_get_active_text(combobox);
-	glimmer_active_module_setup();
+	g_idle_add(glimmer_active_settings_rebuild_cb, NULL);
 }
 
-static void glimmer_entry_setting_changed_cb(GtkEntry *entry, gpointer user_data)
+
+static void glimmer_entry_setting_activated_cb(GtkEntry *entry, gpointer user_data)
 {
 	til_setting_t	*setting = user_data;
-
-	/* XXX FIXME: see above comment for combobox, but oddly I'm only seeing
-	 * errors printed for the combobox case.  I'm just assuming the problem exists here as well.
-	 */
-	g_object_ref(entry);
 
 	/* FIXME TODO there needs to be some validation of the free-form input against setting->desc->regex,
 	 * though that probably shouldn't happen here.
 	 */
 	setting->value = strdup(gtk_entry_get_text(entry));
-	glimmer_active_module_setup();
+	g_idle_add(glimmer_active_settings_rebuild_cb, NULL);
 }
 
 
-/* (re)construct the gui settings pane to reflect *module and *settings */
+static gboolean glimmer_entry_setting_unfocused_cb(GtkEntry *entry, GdkEventFocus *event, gpointer user_data)
+{
+	til_setting_t	*setting = user_data;
+
+	/* FIXME TODO there needs to be some validation of the free-form input against setting->desc->regex,
+	 * though that probably shouldn't happen here.
+	 */
+	setting->value = strdup(gtk_entry_get_text(entry));
+	g_idle_add(glimmer_active_settings_rebuild_cb, NULL);
+
+	return FALSE;
+}
+
+
+static void glimmer_setting_destroyed_cb(GtkWidget *widget, gpointer user_data)
+{
+	til_setting_t	*setting = user_data;
+
+	setting->user_data = NULL;
+}
+
+
+static void glimmer_settings_rebuild(const til_module_t *module, til_settings_t *settings)
+{
+	GtkWidget			*svbox, *focused = NULL;
+	til_setting_t			*setting;
+	const til_setting_desc_t	*desc;
+
+	/* Always create a new settings vbox on rebuild, migrating preexisting shboxes,
+	 * leaving behind no longer visible shboxes, adding newly visible shboxes.
+	 *
+	 * At the end if there's an existing glimmer.settings_box it is destroyed, and
+	 * any remaining shboxes left behind will be destroyed along with it.
+	 *
+	 * A "destroy" callback on each setting's shbox widget is responsible for
+	 * NULLifying its respective setting->user_data so the next rebuild can't possibly
+	 * try reuse it, should a previously invisible setting be made visible again.
+	 */
+	svbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, BOX_SPACING);
+
+	/* Try preserve focus across the rebuild, so things like TAB-cycling through
+	 * the settings works despite the container being reconstructed here.
+	 */
+	focused = gtk_window_get_focus(GTK_WINDOW(glimmer.window));
+
+	til_settings_reset_descs(settings);
+	while (module->setup(settings, &setting, &desc) > 0) {
+		if (!setting) {
+			til_settings_add_value(settings, desc->key, desc->preferred, NULL);
+			continue;
+		}
+
+		if (!setting->user_data) {
+			GtkWidget	*shbox, *label, *control;
+
+			shbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, BOX_SPACING);
+			gtk_widget_set_halign(GTK_WIDGET(shbox), GTK_ALIGN_END);
+			gtk_widget_set_hexpand(GTK_WIDGET(shbox), TRUE);
+			gtk_container_add(GTK_CONTAINER(svbox), shbox);
+			setting->user_data = shbox;
+
+			label = g_object_new(	GTK_TYPE_LABEL,
+						"parent", GTK_CONTAINER(shbox),
+						"label", desc->name,
+						"halign", GTK_ALIGN_START,
+						"margin", LABEL_MARGIN,
+						"visible", TRUE,
+						NULL);
+
+			if (desc->values) {
+				/* combo box */
+				control = gtk_combo_box_text_new();
+				for (int i = 0; desc->values[i]; i++) {
+					gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(control), NULL, desc->values[i]);
+					if (!strcmp(setting->value, desc->values[i]))
+						gtk_combo_box_set_active(GTK_COMBO_BOX(control), i);
+				}
+				g_signal_connect_after(control, "changed", G_CALLBACK(glimmer_combobox_setting_changed_cb), setting);
+
+			} else {
+				/* plain unstructured text input box */
+				control = gtk_entry_new();
+				gtk_entry_set_text(GTK_ENTRY(control), setting->value);
+				g_signal_connect_after(control, "activate", G_CALLBACK(glimmer_entry_setting_activated_cb), setting);
+				g_signal_connect_after(control, "focus-out-event", G_CALLBACK(glimmer_entry_setting_unfocused_cb), setting);
+			}
+
+			gtk_widget_set_margin_end(control, CONTROL_MARGIN);
+			gtk_container_add(GTK_CONTAINER(shbox), control);
+			g_signal_connect(shbox, "destroy", G_CALLBACK(glimmer_setting_destroyed_cb), setting);
+		} else {
+			g_object_ref(setting->user_data);
+			gtk_container_remove(GTK_CONTAINER(glimmer.settings_box), setting->user_data);
+			gtk_container_add(GTK_CONTAINER(svbox), setting->user_data);
+			g_object_unref(setting->user_data);
+		}
+
+		if (!setting->desc)
+			setting->desc = desc;
+	}
+
+	if (glimmer.settings_box)
+		gtk_widget_destroy(glimmer.settings_box);
+
+	gtk_container_add(GTK_CONTAINER(glimmer.settings_frame), svbox);
+	glimmer.settings_box = svbox;
+
+	if (focused)
+		gtk_window_set_focus(GTK_WINDOW(glimmer.window), focused);
+
+	gtk_widget_show_all(svbox);
+}
+
+
+/* (re)construct the gui module frame to reflect *module and *settings */
 static void glimmer_module_setup(const til_module_t *module, til_settings_t *settings)
 {
 	GtkWidget	*vbox, *label;
 
-	if (glimmer.module_frame)
+	if (glimmer.module_frame) {
 		gtk_widget_destroy(glimmer.module_frame);
+		glimmer.settings_box = NULL;
+	}
 
 	glimmer.module_frame = g_object_new(	GTK_TYPE_FRAME,
 						"parent", GTK_CONTAINER(glimmer.module_box),
@@ -229,11 +346,7 @@ static void glimmer_module_setup(const til_module_t *module, til_settings_t *set
 				NULL);
 
 	if (module->setup) {
-		GtkWidget			*frame, *svbox;
-		til_setting_t			*setting;
-		const til_setting_desc_t	*desc;
-
-		frame = g_object_new(	GTK_TYPE_FRAME,
+		glimmer.settings_frame = g_object_new(	GTK_TYPE_FRAME,
 					"parent", GTK_CONTAINER(vbox),
 					"label", "Settings",
 					"label-xalign", .01f,
@@ -241,76 +354,13 @@ static void glimmer_module_setup(const til_module_t *module, til_settings_t *set
 					"visible", TRUE,
 					NULL);
 		gtk_box_set_child_packing(	GTK_BOX(vbox),
-						GTK_WIDGET(frame),
+						GTK_WIDGET(glimmer.settings_frame),
 						TRUE,
 						TRUE,
 						BOX_SPACING,
 						GTK_PACK_START);
 
-		svbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, BOX_SPACING);
-		gtk_container_add(GTK_CONTAINER(frame), svbox);
-
-		til_settings_reset_descs(settings);
-		while (module->setup(settings, &setting, &desc) > 0) {
-			GtkWidget	*shbox;
-
-			if (!setting) {
-				til_settings_add_value(settings, desc->key, desc->preferred, NULL);
-				continue;
-			}
-
-			shbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, BOX_SPACING);
-			gtk_container_add(GTK_CONTAINER(svbox), shbox);
-			gtk_widget_set_halign(GTK_WIDGET(shbox), GTK_ALIGN_START);
-
-			label = g_object_new(	GTK_TYPE_LABEL,
-						"parent", GTK_CONTAINER(shbox),
-						"label", desc->name,
-						"halign", GTK_ALIGN_START,
-						"margin", LABEL_MARGIN,
-						"visible", TRUE,
-						NULL);
-
-			if (desc->values) {
-				GtkWidget	*combobox;
-
-				/* combo box */
-				combobox = gtk_combo_box_text_new();
-				gtk_container_add(GTK_CONTAINER(shbox), combobox);
-				gtk_widget_set_halign(GTK_WIDGET(combobox), GTK_ALIGN_END);
-				for (int i = 0; desc->values[i]; i++) {
-					gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(combobox), NULL, desc->values[i]);
-					if (!strcmp(setting->value, desc->values[i]))
-						gtk_combo_box_set_active(GTK_COMBO_BOX(combobox), i);
-				}
-				g_signal_connect(combobox, "changed", G_CALLBACK(glimmer_combobox_setting_changed_cb), setting);
-
-			} else {
-				GtkWidget	*entry;
-
-				/* plain unstructured text input box */
-				entry = gtk_entry_new();
-				gtk_entry_set_text(GTK_ENTRY(entry), setting->value);
-				gtk_container_add(GTK_CONTAINER(shbox), entry);
-				gtk_widget_set_halign(GTK_WIDGET(entry), GTK_ALIGN_END);
-
-				/* XXX FIXME */
-				/* XXX FIXME */
-				/* XXX FIXME */
-				/* "activate" only occurs on hitting Enter in the GtkEntry.  So we'll miss
-				 * edits that are visible but not Entered before hitting Go!  We likely need
-				 * to catch more signals...
-				 */
-				/* XXX FIXME */
-				/* XXX FIXME */
-				/* XXX FIXME */
-
-				g_signal_connect(entry, "activate", G_CALLBACK(glimmer_entry_setting_changed_cb), setting);
-			}
-
-			if (!setting->desc)
-				setting->desc = desc;
-		}
+		glimmer_settings_rebuild(module, settings);
 	}
 
 	gtk_widget_show_all(glimmer.module_frame);
@@ -325,14 +375,14 @@ static void glimmer_module_changed_cb(GtkComboBox *box, G_GNUC_UNUSED gpointer u
 
 static void glimmer_activate(GtkApplication *app, gpointer user_data)
 {
-	GtkWidget	*window, *vbox, *button;
+	GtkWidget	*vbox, *button;
 
-	window = gtk_application_window_new(app);
-	gtk_window_set_title(GTK_WINDOW(window), "glimmer");
-	gtk_window_set_default_size(GTK_WINDOW(window), DEFAULT_WIDTH, DEFAULT_HEIGHT);
+	glimmer.window = gtk_application_window_new(app);
+	gtk_window_set_title(GTK_WINDOW(glimmer.window), "glimmer");
+	gtk_window_set_default_size(GTK_WINDOW(glimmer.window), DEFAULT_WIDTH, DEFAULT_HEIGHT);
 
 	vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, BOX_SPACING);
-	gtk_container_add(GTK_CONTAINER(window), vbox);
+	gtk_container_add(GTK_CONTAINER(glimmer.window), vbox);
 
 	{ /* construct modules list combobox, associating a name, module, and settings per entry */
 		const til_module_t	**modules;
@@ -398,7 +448,7 @@ static void glimmer_activate(GtkApplication *app, gpointer user_data)
 				NULL);
 	g_signal_connect(button, "clicked", G_CALLBACK(glimmer_go), NULL);
 
-	gtk_widget_show_all(window);
+	gtk_widget_show_all(glimmer.window);
 }
 
 
