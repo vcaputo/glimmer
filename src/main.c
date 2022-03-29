@@ -347,12 +347,12 @@ static void glimmer_module_setup(const til_module_t *module, til_settings_t *set
 
 	if (module->setup) {
 		glimmer.settings_frame = g_object_new(	GTK_TYPE_FRAME,
-					"parent", GTK_CONTAINER(vbox),
-					"label", "Settings",
-					"label-xalign", .01f,
-					"margin", FRAME_MARGIN,
-					"visible", TRUE,
-					NULL);
+							"parent", GTK_CONTAINER(vbox),
+							"label", "Settings",
+							"label-xalign", .01f,
+							"margin", FRAME_MARGIN,
+							"visible", TRUE,
+							NULL);
 		gtk_box_set_child_packing(	GTK_BOX(vbox),
 						GTK_WIDGET(glimmer.settings_frame),
 						TRUE,
