@@ -188,6 +188,8 @@ static void glimmer_entry_setting_activated_cb(GtkEntry *entry, gpointer user_da
 }
 
 
+static int glimmer_settings_rebuilding;
+
 static gboolean glimmer_entry_setting_unfocused_cb(GtkEntry *entry, GdkEventFocus *event, gpointer user_data)
 {
 	til_setting_t	*setting = user_data;
@@ -196,7 +198,8 @@ static gboolean glimmer_entry_setting_unfocused_cb(GtkEntry *entry, GdkEventFocu
 	 * though that probably shouldn't happen here.
 	 */
 	setting->value = strdup(gtk_entry_get_text(entry));
-	g_idle_add(glimmer_active_settings_rebuild_cb, NULL);
+	if (!glimmer_settings_rebuilding)
+		g_idle_add(glimmer_active_settings_rebuild_cb, NULL);
 
 	return FALSE;
 }
@@ -215,6 +218,8 @@ static void glimmer_settings_rebuild(const til_module_t *module, til_settings_t 
 	GtkWidget			*svbox, *focused = NULL;
 	til_setting_t			*setting;
 	const til_setting_desc_t	*desc;
+
+	glimmer_settings_rebuilding = 1;
 
 	/* Always create a new settings vbox on rebuild, migrating preexisting shboxes,
 	 * leaving behind no longer visible shboxes, adding newly visible shboxes.
@@ -299,6 +304,8 @@ static void glimmer_settings_rebuild(const til_module_t *module, til_settings_t 
 		gtk_window_set_focus(GTK_WINDOW(glimmer.window), focused);
 
 	gtk_widget_show_all(svbox);
+
+	glimmer_settings_rebuilding = 0;
 }
 
 
