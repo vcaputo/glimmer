@@ -123,6 +123,7 @@ static void * glimmer_thread(void *foo)
 static void glimmer_go(GtkButton *button, gpointer user_data)
 {
 	til_settings_t	*settings;
+	void		*setup = NULL;
 	int		r;
 
 	if (glimmer.fb) {
@@ -143,12 +144,15 @@ static void glimmer_go(GtkButton *button, gpointer user_data)
 
 	gettimeofday(&glimmer.start_tv, NULL);
 	glimmer_active_module(&glimmer.module, &settings);
+	if (glimmer.module->setup)
+		glimmer.module->setup(settings, NULL, NULL, &setup);
 	r = til_module_create_context(
 					glimmer.module,
 					glimmer_get_ticks(
 						&glimmer.start_tv,
 						&glimmer.start_tv,
 						glimmer.ticks_offset),
+					setup,
 					&glimmer.module_context);
 	if (r < 0) {
 		puts("context no go!");
@@ -239,7 +243,7 @@ static void glimmer_settings_rebuild(const til_module_t *module, til_settings_t 
 	focused = gtk_window_get_focus(GTK_WINDOW(glimmer.window));
 
 	til_settings_reset_descs(settings);
-	while (module->setup(settings, &setting, &desc) > 0) {
+	while (module->setup(settings, &setting, &desc, NULL) > 0) {
 		if (!setting) {
 			til_settings_add_value(settings, desc->key, desc->preferred, NULL);
 			continue;
