@@ -22,7 +22,7 @@
             "sources" : [
                 {
                     "type" : "git",
-                    "url" : "https://github.com/vcaputo/glimmer.git"
+                    "url" : "https://git.pengaru.com/glimmer"
                 }
             ]
         }
