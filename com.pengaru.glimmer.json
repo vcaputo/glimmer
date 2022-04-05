@@ -1,7 +1,7 @@
 {
     "app-id" : "com.pengaru.glimmer",
     "runtime" : "org.gnome.Platform",
-    "runtime-version" : "3.38",
+    "runtime-version" : "42",
     "sdk" : "org.gnome.Sdk",
     "command" : "glimmer",
     "finish-args" : [
@@ -18,7 +18,7 @@
         {
             "name" : "glimmer",
             "buildsystem" : "autotools",
-            "builddir" : false,
+            "builddir" : true,
             "sources" : [
                 {
                     "type" : "git",
