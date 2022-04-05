@@ -61,6 +61,17 @@ static void resized(GtkWidget *widget, GtkAllocation *allocation, gpointer user_
 }
 
 
+/* called on "delete-event" for the fb's window */
+static gboolean deleted(GtkWidget *self, GdkEvent *event, gpointer user_data)
+{
+	gtk_fb_t	*c = user_data;
+
+	c->window = NULL;
+
+	return FALSE;
+}
+
+
 /* parse settings and get the output window realized before
  * attempting to create any pages "similar" to it.
  */
@@ -94,6 +105,7 @@ static int gtk_fb_init(const til_settings_t *settings, void **res_context)
 
 	c->window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 	gtk_widget_realize(c->window);
+	g_signal_connect(c->window, "delete-event", G_CALLBACK(deleted), c);
 
 	*res_context = c;
 
@@ -105,7 +117,8 @@ static void gtk_fb_shutdown(til_fb_t *fb, void *context)
 {
 	gtk_fb_t	*c = context;
 
-	gtk_widget_destroy(c->window);
+	if (c->window)
+		gtk_widget_destroy(c->window);
 	free(c);
 }
 
@@ -142,6 +155,9 @@ static int gtk_fb_acquire(til_fb_t *fb, void *context, void *page)
 	gtk_fb_t	*c = context;
 	gtk_fb_page_t	*p = page;
 
+	if (!c->window)
+		return -EPIPE;
+
 	c->image = gtk_image_new_from_surface(p->surface);
 	g_signal_connect_after(c->image, "size-allocate", G_CALLBACK(resized), c);
 	g_signal_connect(c->image, "draw", G_CALLBACK(draw_cb), fb);
@@ -158,7 +174,8 @@ static void gtk_fb_release(til_fb_t *fb, void *context)
 {
 	gtk_fb_t	*c = context;
 
-	gtk_widget_destroy(c->image);
+	if (c->window)
+		gtk_widget_destroy(c->image);
 }
 
 
@@ -167,6 +184,9 @@ static void * gtk_fb_page_alloc(til_fb_t *fb, void *context, til_fb_page_t *res_
 	gtk_fb_t	*c = context;
 	gtk_fb_page_t	*p;
 	GdkWindow	*gdk_window;
+
+	if (!c->window)
+		return NULL;
 
 	p = calloc(1, sizeof(gtk_fb_page_t));
 	if (!p)
@@ -214,6 +234,9 @@ static int gtk_fb_page_flip(til_fb_t *fb, void *context, void *page)
 {
 	gtk_fb_t	*c = context;
 	gtk_fb_page_t	*p = page;
+
+	if (!c->window)
+		return -EPIPE;
 
 	cairo_surface_mark_dirty(p->surface);
 	gtk_image_set_from_surface(GTK_IMAGE(c->image), p->surface);
